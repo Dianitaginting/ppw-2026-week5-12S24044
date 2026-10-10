@@ -18,7 +18,8 @@ class KategoriFactory extends Factory
     public function definition(): array
     {
         return [
-            //
+            'kode_kategori' => fake()->unique()->bothify('KTG#####'),
+            'nama_kategori' => fake()->unique()->words(2, true),
         ];
     }
 }
