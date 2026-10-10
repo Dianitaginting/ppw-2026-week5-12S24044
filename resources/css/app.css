@@ -1,9 +1,27 @@
-@import 'tailwindcss';
+@import 'bootstrap/dist/css/bootstrap.min.css';
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
+:root {
+    --sipus-purple: #4c1d95;
+    --sipus-purple-dark: #3b0764;
+}
 
-@theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+body {
+    min-height: 100vh;
+}
+
+.navbar-del {
+    background-color: var(--sipus-purple);
+}
+
+.btn-del {
+    color: #fff;
+    background-color: var(--sipus-purple);
+    border-color: var(--sipus-purple);
+}
+
+.btn-del:hover,
+.btn-del:focus {
+    color: #fff;
+    background-color: var(--sipus-purple-dark);
+    border-color: var(--sipus-purple-dark);
 }

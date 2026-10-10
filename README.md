@@ -7,7 +7,7 @@ SIPUS-Del (Sistem Informasi Perpustakaan Kampus Del) adalah aplikasi web untuk m
 - Laravel 13
 - PHP 8.5 (project mensyaratkan PHP `^8.3`)
 - SQLite
-- Bootstrap 5.3
+- Bootstrap 5.3 dan Vite 5
 - PHPUnit
 
 ## Fitur
@@ -50,7 +50,8 @@ SIPUS-Del (Sistem Informasi Perpustakaan Kampus Del) adalah aplikasi web untuk m
 ## Persyaratan
 
 - PHP 8.5 untuk menjalankan konfigurasi project ini (batas PHP pada `composer.json` adalah `^8.3`).
-- Composer 2.
+- Composer 2.6 atau lebih baru.
+- Node.js 18 atau 20 dan npm.
 - Ekstensi PDO SQLite aktif.
 
 ## Instalasi di Windows (PowerShell)
@@ -63,17 +64,18 @@ Set-Location ppw-2026-week5-12S24044
 composer install
 Copy-Item .env.example .env
 php artisan key:generate
+npm install
+npm run build
+if (!(Test-Path database\database.sqlite)) {
+    New-Item -ItemType File -Path database\database.sqlite
+}
 php artisan migrate:fresh --seed
 php artisan serve
 ```
 
 Perintah `migrate:fresh --seed` membuat ulang tabel dan memasukkan data contoh. Perintah ini menghapus tabel/data lama pada database yang dikonfigurasi; jangan jalankan pada database yang berisi data yang perlu dipertahankan.
 
-Buka [http://127.0.0.1:8000]. (http://127.0.0.1:8000). Project menggunakan SQLite dan secara default menyimpan database di `database/database.sqlite`. Jika file tersebut belum tersedia, buat file kosong terlebih dahulu:
-
-```powershell
-New-Item -ItemType File -Path database/database.sqlite
-```
+Buka [http://127.0.0.1:8000](http://127.0.0.1:8000). Project menggunakan SQLite dan secara default menyimpan database di `database/database.sqlite`.
 
 ## Halaman Aplikasi
 
@@ -92,6 +94,10 @@ php artisan test
 ```
 
 Tes fitur mencakup CRUD buku dan kategori, validasi input, penghapusan relasi, serta jumlah query daftar buku untuk memastikan eager loading mencegah N+1 query.
+
+## Aset Frontend
+
+Bootstrap dan aset CSS/JavaScript aplikasi dikelola melalui Vite. Untuk pengembangan frontend, jalankan `npm run dev` di PowerShell terpisah; untuk menghasilkan aset siap pakai, jalankan `npm run build`.
 
 ## Audit Query
 
