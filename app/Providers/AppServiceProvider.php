@@ -19,6 +19,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+     \Illuminate\Support\Facades\DB::listen(function ($query) {
+        \Illuminate\Support\Facades\Log::info(sprintf(
+            "[SQL AUDIT] (%.2f ms) %s", $query->time, $query->sql
+            ));
+        });
     }
 }
