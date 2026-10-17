@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Buku;
 use App\Models\Kategori;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -27,33 +28,26 @@ class BukuController extends Controller
         }
 
         $query = Buku::query()
-            ->join(
-                'kategoris',
-                'bukus.kategori_id',
-                '=',
-                'kategoris.id'
-            )
-            ->select(
-                'bukus.*',
-                'kategoris.nama_kategori'
-            )
+            ->with('kategori')
             ->withCount('peminjamans');
 
         // Pencarian berdasarkan judul, ISBN, penulis,
         // atau nama kategori.
-        if ($search !== '') {
-            $query->where(function ($subQuery) use ($search) {
+        $query->when($search !== '', function (Builder $query) use ($search) {
+            $query->where(function (Builder $subQuery) use ($search) {
                 $subQuery
                     ->where('bukus.judul', 'like', "%{$search}%")
                     ->orWhere('bukus.isbn', 'like', "%{$search}%")
                     ->orWhere('bukus.penulis', 'like', "%{$search}%")
-                    ->orWhere(
-                        'kategoris.nama_kategori',
-                        'like',
-                        "%{$search}%"
-                    );
+                    ->orWhereHas('kategori', function (Builder $kategoriQuery) use ($search) {
+                        $kategoriQuery->where(
+                            'nama_kategori',
+                            'like',
+                            "%{$search}%"
+                        );
+                    });
             });
-        }
+        });
 
         // Mengurutkan dan membatasi hasil menjadi 10 buku per halaman.
         $bukus = $query
@@ -68,7 +62,7 @@ class BukuController extends Controller
             )
             ->first();
 
-        $statistikPeminjaman = DB::table('peminjamen')
+        $statistikPeminjaman = DB::table('peminjamans')
             ->selectRaw(
                 "COUNT(CASE WHEN status = 'dipinjam' THEN 1 END) as total_dipinjam, COUNT(CASE WHEN status = 'dikembalikan' THEN 1 END) as total_dikembalikan"
             )

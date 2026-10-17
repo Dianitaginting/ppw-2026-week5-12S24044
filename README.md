@@ -9,9 +9,9 @@ stok yang konsisten, pencarian dan statistik katalog, serta autentikasi petugas.
 
 | Kriteria penilaian | Bobot | Implementasi |
 | --- | ---: | --- |
-| Skema tabel peminjaman dan relasi Eloquent | 20% | `peminjamen` memiliki `kode_pinjam` unik dan foreign key ke `bukus`; `Buku` memiliki banyak peminjaman dan `Peminjaman` terkait ke satu buku. |
-| Transaksi ACID dan concurrency locking | 25% | `PeminjamanService` membungkus pinjam/kembali dalam `DB::transaction()`, mengunci baris dengan `lockForUpdate()`, menolak stok nol, dan mencegah pengembalian ganda. |
-| Query Builder, `withCount`, pencarian, dan statistik | 15% | Katalog menampilkan jumlah riwayat pinjam per buku, mendukung pencarian judul/penulis/ISBN/kategori dan pagination, serta statistik total judul, stok, transaksi dipinjam, dan dikembalikan. Pencarian terakhir disimpan di Session. |
+| Skema tabel peminjaman dan relasi Eloquent | 20% | `peminjamans` memiliki `kode_pinjam` unik dan foreign key cascade ke `bukus`; `Buku` memiliki banyak peminjaman dan `Peminjaman` terkait ke satu buku. |
+| Transaksi ACID dan concurrency locking | 25% | `PeminjamanService` membungkus pinjam/kembali dalam `DB::transaction()`, mengunci baris dengan `lockForUpdate()`, menolak stok nol dan pinjaman aktif duplikat untuk NIM+buku yang sama, mencegah pengembalian ganda, serta mencatat `QueryException` ke log. |
+| Query Builder, `withCount`, pencarian, dan statistik | 15% | Katalog memakai `with('kategori')->withCount('peminjamans')`, filter dinamis `when()` untuk judul/penulis/ISBN/kategori, pagination `withQueryString()`, dan statistik `DB::table()` untuk jumlah judul, stok, peminjaman aktif, dan pengembalian. Pencarian terakhir disimpan di Session. |
 | Session, cookie, dan autentikasi petugas | 25% | Login menggunakan `Auth::attempt()`, rotasi session, opsi “Ingat saya”, logout yang menginvalidasi session dan token CSRF, serta rute aplikasi yang dilindungi middleware `auth`. Sesudah peminjaman berhasil, data peminjam/transaksi disimpan dalam Session dan kode transaksi dikirim melalui cookie `HttpOnly`, `SameSite=Lax` memakai `Cookie::queue()`. |
 | Seeder, bukti uji transaksi, dan dokumentasi | 15% | Seeder membuat akun demo, buku stok 0/1, serta transaksi aktif/selesai; tes mencakup rollback, stok, login, logout, cookie HttpOnly, dan akses rute. Panduan verifikasi ada di bawah. |
 
@@ -104,7 +104,7 @@ memberikan row-level `FOR UPDATE` dengan semantik yang sama.
 ## Struktur Database dan Kode Utama
 
 - `kategoris` dan `bukus`: katalog Minggu 5 beserta relasi kategori.
-- `peminjamen`: kode peminjaman unik, buku, NIM/nama peminjam, tanggal pinjam,
+- `peminjamans`: kode peminjaman unik, buku, NIM/nama peminjam, tanggal pinjam,
   jatuh tempo, tanggal kembali, serta status `dipinjam` atau `dikembalikan`.
 - `app/Models/Buku.php` dan `app/Models/Peminjaman.php`: relasi Eloquent.
 - `app/Services/PeminjamanService.php`: operasi pinjam/kembali atomik dan
@@ -114,6 +114,38 @@ memberikan row-level `FOR UPDATE` dengan semantik yang sama.
 - `app/Http/Controllers/Auth/PetugasAuthController.php` dan `routes/web.php`:
   autentikasi, logout aman, dan proteksi middleware.
 - `database/seeders/`: data katalog, transaksi contoh, dan akun petugas.
+
+### ERD
+
+```mermaid
+erDiagram
+    KATEGORIS ||--o{ BUKUS : mengelompokkan
+    BUKUS ||--o{ PEMINJAMANS : memiliki
+
+    KATEGORIS {
+        bigint id PK
+        string kode_kategori UK
+        string nama_kategori
+    }
+    BUKUS {
+        bigint id PK
+        bigint kategori_id FK
+        string isbn UK
+        string judul
+        integer stok
+    }
+    PEMINJAMANS {
+        bigint id PK
+        string kode_pinjam UK
+        bigint buku_id FK
+        string nim_peminjam
+        string nama_peminjam
+        date tanggal_pinjam
+        date tanggal_jatuh_tempo
+        date tanggal_kembali
+        string status
+    }
+```
 
 ## Pengujian dan Pemeriksaan Gaya
 
@@ -125,8 +157,9 @@ php artisan test
 
 Tes mencakup CRUD katalog, jumlah peminjaman dan seluruh statistik, penyimpanan
 pencarian dan transaksi terakhir di Session, stok kosong, rollback ketika
-penyimpanan transaksi gagal, pengembalian ganda, autentikasi, proteksi rute,
-serta flag HttpOnly/SameSite pada cookie.
+penyimpanan transaksi gagal, penolakan pinjaman aktif duplikat, pencatatan
+`QueryException`, pengembalian ganda, autentikasi, proteksi rute, serta flag
+HttpOnly/SameSite pada cookie.
 
 Pemeriksaan format PHP:
 

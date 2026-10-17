@@ -140,7 +140,7 @@
                             </td>
 
                             <td>
-                                {{ $buku->nama_kategori }}
+                                {{ $buku->kategori?->nama_kategori ?? '-' }}
                             </td>
 
                             <td>

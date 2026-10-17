@@ -7,7 +7,9 @@ use App\Models\Kategori;
 use App\Models\Peminjaman;
 use App\Models\User;
 use App\Services\PeminjamanService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Cookie;
 use Tests\TestCase;
@@ -132,7 +134,64 @@ class PeminjamanServiceTest extends TestCase
         }
 
         $this->assertSame(0, $buku->fresh()->stok);
-        $this->assertDatabaseCount('peminjamen', 0);
+        $this->assertDatabaseCount('peminjamans', 0);
+    }
+
+    public function test_nim_tidak_bisa_meminjam_buku_yang_sama_sebelum_pengembalian(): void
+    {
+        $buku = $this->buatBuku(2);
+        $service = app(PeminjamanService::class);
+
+        $service->pinjam($buku->id, '12S24044', 'Mahasiswa Test');
+
+        try {
+            $service->pinjam($buku->id, '12S24044', 'Mahasiswa Test');
+
+            $this->fail('Peminjaman aktif kedua seharusnya ditolak.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('buku_id', $exception->errors());
+        }
+
+        $this->assertSame(1, $buku->fresh()->stok);
+        $this->assertDatabaseCount('peminjamans', 1);
+    }
+
+    public function test_query_exception_during_borrowing_is_logged_and_rolled_back(): void
+    {
+        $buku = $this->buatBuku(1);
+        $existing = Peminjaman::create([
+            'kode_pinjam' => 'PJM-DUPLICATE',
+            'buku_id' => $buku->id,
+            'nim_peminjam' => '12S24045',
+            'nama_peminjam' => 'Mahasiswa Lain',
+            'tanggal_pinjam' => today(),
+            'tanggal_jatuh_tempo' => today()->addDays(7),
+            'status' => 'dipinjam',
+        ]);
+
+        Peminjaman::creating(static function (Peminjaman $peminjaman) use ($existing): void {
+            $peminjaman->kode_pinjam = $existing->kode_pinjam;
+        });
+        Log::spy();
+
+        try {
+            app(PeminjamanService::class)->pinjam(
+                $buku->id,
+                '12S24044',
+                'Mahasiswa Test'
+            );
+
+            $this->fail('Unique constraint seharusnya menghasilkan QueryException.');
+        } catch (QueryException) {
+            Log::shouldHaveReceived('error')
+                ->once()
+                ->withArgs(fn (string $message, array $context): bool => $message
+                    === 'Database error while processing a book borrowing.'
+                    && $context['buku_id'] === $buku->id);
+        }
+
+        $this->assertSame(1, $buku->fresh()->stok);
+        $this->assertDatabaseCount('peminjamans', 1);
     }
 
     public function test_stok_dipulihkan_jika_pembuatan_transaksi_gagal(): void
@@ -159,7 +218,7 @@ class PeminjamanServiceTest extends TestCase
         }
 
         $this->assertSame(1, $buku->fresh()->stok);
-        $this->assertDatabaseCount('peminjamen', 0);
+        $this->assertDatabaseCount('peminjamans', 0);
     }
 
     /**

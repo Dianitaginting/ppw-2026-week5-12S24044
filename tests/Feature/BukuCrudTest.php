@@ -56,9 +56,9 @@ class BukuCrudTest extends TestCase
             ->assertViewIs('buku.index')
             ->assertSee($kategori->nama_kategori);
 
-        // Dua query melayani pagination, dua lainnya menghitung statistik.
+        // Pagination, eager-loaded categories, and aggregate statistics stay bounded.
         $this->assertCount(
-            4,
+            5,
             $queries,
             'The index should avoid extra per-book category or loan queries.'
         );
@@ -259,7 +259,7 @@ class BukuCrudTest extends TestCase
         $this->assertDatabaseMissing('bukus', [
             'id' => $buku->id,
         ]);
-        $this->assertDatabaseMissing('peminjamen', [
+        $this->assertDatabaseMissing('peminjamans', [
             'id' => $peminjaman->id,
         ]);
     }
