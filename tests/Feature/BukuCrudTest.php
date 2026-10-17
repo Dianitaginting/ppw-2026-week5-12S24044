@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Buku;
 use App\Models\Kategori;
+use App\Models\User;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -13,28 +14,55 @@ class BukuCrudTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_buku_index_eager_loads_categories_without_n_plus_one_queries(): void
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Semua pengujian dijalankan sebagai petugas yang sudah login.
+        $this->actingAs(User::factory()->create());
+    }
+
+    public function test_buku_index_loads_categories_without_n_plus_one_queries(): void
     {
         $kategori = Kategori::factory()->create();
-        Buku::factory(5)->create(['kategori_id' => $kategori->id]);
+
+        Buku::factory(5)->create([
+            'kategori_id' => $kategori->id,
+        ]);
+
         $collectQueries = false;
         $queries = [];
 
-        DB::listen(function (QueryExecuted $query) use (&$collectQueries, &$queries): void {
-            if ($collectQueries && preg_match('/^\s*select\b/i', $query->sql) === 1) {
+        DB::listen(function (QueryExecuted $query) use (
+            &$collectQueries,
+            &$queries
+        ): void {
+            if (
+                $collectQueries &&
+                preg_match('/^\s*select\b/i', $query->sql) === 1
+            ) {
                 $queries[] = $query->sql;
             }
         });
 
         $collectQueries = true;
+
         $response = $this->get(route('buku.index'));
+
         $collectQueries = false;
 
         $response->assertOk()
             ->assertViewIs('buku.index')
             ->assertSee($kategori->nama_kategori);
 
-        $this->assertCount(3, $queries, 'The paginated index should query book count, books, and categories once.');
+        // Query katalog menggunakan JOIN kategori dan subquery
+        // jumlah peminjaman, sehingga tidak perlu query kategori
+        // terpisah untuk setiap buku.
+        $this->assertCount(
+            2,
+            $queries,
+            'The paginated index should use a count query and a data query.'
+        );
     }
 
     public function test_buku_can_be_created_and_shown(): void
@@ -51,6 +79,7 @@ class BukuCrudTest extends TestCase
             ->assertSessionHas('success');
 
         $buku = Buku::where('isbn', $payload['isbn'])->firstOrFail();
+
         $this->assertSame($kategori->id, $buku->kategori_id);
 
         $this->get(route('buku.show', $buku))
@@ -84,7 +113,11 @@ class BukuCrudTest extends TestCase
     public function test_buku_isbn_must_be_unique(): void
     {
         $kategori = Kategori::factory()->create();
-        $existing = Buku::factory()->create(['kategori_id' => $kategori->id]);
+
+        $existing = Buku::factory()->create([
+            'kategori_id' => $kategori->id,
+        ]);
+
         $payload = $this->validBukuPayload($kategori);
         $payload['isbn'] = $existing->isbn;
 
@@ -95,7 +128,11 @@ class BukuCrudTest extends TestCase
     public function test_buku_can_be_edited_and_updated_without_changing_its_isbn(): void
     {
         $kategori = Kategori::factory()->create();
-        $buku = Buku::factory()->create(['kategori_id' => $kategori->id]);
+
+        $buku = Buku::factory()->create([
+            'kategori_id' => $kategori->id,
+        ]);
+
         $payload = $this->validBukuPayload($kategori);
         $payload['isbn'] = $buku->isbn;
         $payload['judul'] = 'Judul Buku yang Diperbarui';
@@ -118,8 +155,15 @@ class BukuCrudTest extends TestCase
     public function test_buku_update_rejects_an_isbn_used_by_another_buku(): void
     {
         $kategori = Kategori::factory()->create();
-        $first = Buku::factory()->create(['kategori_id' => $kategori->id]);
-        $second = Buku::factory()->create(['kategori_id' => $kategori->id]);
+
+        $first = Buku::factory()->create([
+            'kategori_id' => $kategori->id,
+        ]);
+
+        $second = Buku::factory()->create([
+            'kategori_id' => $kategori->id,
+        ]);
+
         $payload = $this->validBukuPayload($kategori);
         $payload['isbn'] = $first->isbn;
 
@@ -130,13 +174,18 @@ class BukuCrudTest extends TestCase
     public function test_buku_can_be_deleted(): void
     {
         $kategori = Kategori::factory()->create();
-        $buku = Buku::factory()->create(['kategori_id' => $kategori->id]);
+
+        $buku = Buku::factory()->create([
+            'kategori_id' => $kategori->id,
+        ]);
 
         $this->delete(route('buku.destroy', $buku))
             ->assertRedirect(route('buku.index'))
             ->assertSessionHas('success');
 
-        $this->assertDatabaseMissing('bukus', ['id' => $buku->id]);
+        $this->assertDatabaseMissing('bukus', [
+            'id' => $buku->id,
+        ]);
     }
 
     /**

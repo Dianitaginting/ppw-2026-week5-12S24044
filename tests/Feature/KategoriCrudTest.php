@@ -4,12 +4,21 @@ namespace Tests\Feature;
 
 use App\Models\Buku;
 use App\Models\Kategori;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class KategoriCrudTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Login sebagai petugas untuk setiap pengujian.
+        $this->actingAs(User::factory()->create());
+    }
 
     public function test_kategori_index_and_create_form_are_available(): void
     {
@@ -37,8 +46,14 @@ class KategoriCrudTest extends TestCase
             ->assertRedirect(route('kategori.index'))
             ->assertSessionHas('success');
 
-        $kategori = Kategori::where('kode_kategori', $payload['kode_kategori'])->firstOrFail();
-        $buku = Buku::factory()->create(['kategori_id' => $kategori->id]);
+        $kategori = Kategori::where(
+            'kode_kategori',
+            $payload['kode_kategori']
+        )->firstOrFail();
+
+        $buku = Buku::factory()->create([
+            'kategori_id' => $kategori->id,
+        ]);
 
         $this->get(route('kategori.show', $kategori))
             ->assertOk()
@@ -49,12 +64,17 @@ class KategoriCrudTest extends TestCase
 
     public function test_kategori_creation_validates_required_and_unique_fields(): void
     {
-        Kategori::factory()->create(['kode_kategori' => 'KTG00001']);
+        Kategori::factory()->create([
+            'kode_kategori' => 'KTG00001',
+        ]);
 
         $this->post(route('kategori.store'), [
             'kode_kategori' => 'KTG00001',
             'nama_kategori' => '',
-        ])->assertSessionHasErrors(['kode_kategori', 'nama_kategori']);
+        ])->assertSessionHasErrors([
+            'kode_kategori',
+            'nama_kategori',
+        ]);
     }
 
     public function test_kategori_can_be_edited_without_changing_its_code(): void
@@ -80,8 +100,13 @@ class KategoriCrudTest extends TestCase
 
     public function test_kategori_update_rejects_an_existing_code(): void
     {
-        Kategori::factory()->create(['kode_kategori' => 'KTG00001']);
-        $kategori = Kategori::factory()->create(['kode_kategori' => 'KTG00002']);
+        Kategori::factory()->create([
+            'kode_kategori' => 'KTG00001',
+        ]);
+
+        $kategori = Kategori::factory()->create([
+            'kode_kategori' => 'KTG00002',
+        ]);
 
         $this->put(route('kategori.update', $kategori), [
             'kode_kategori' => 'KTG00001',
@@ -92,13 +117,21 @@ class KategoriCrudTest extends TestCase
     public function test_deleting_kategori_also_deletes_related_books(): void
     {
         $kategori = Kategori::factory()->create();
-        $buku = Buku::factory()->create(['kategori_id' => $kategori->id]);
+
+        $buku = Buku::factory()->create([
+            'kategori_id' => $kategori->id,
+        ]);
 
         $this->delete(route('kategori.destroy', $kategori))
             ->assertRedirect(route('kategori.index'))
             ->assertSessionHas('success');
 
-        $this->assertDatabaseMissing('kategoris', ['id' => $kategori->id]);
-        $this->assertDatabaseMissing('bukus', ['id' => $buku->id]);
+        $this->assertDatabaseMissing('kategoris', [
+            'id' => $kategori->id,
+        ]);
+
+        $this->assertDatabaseMissing('bukus', [
+            'id' => $buku->id,
+        ]);
     }
 }
