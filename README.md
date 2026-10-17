@@ -202,6 +202,3 @@ Cookie `last_peminjaman` terlihat memiliki flag `HttpOnly` dan `SameSite=Lax`.
 Nilai cookie pada screenshot disamarkan agar tidak membocorkan token sesi atau
 transaksi. Tes otomatis `PeminjamanServiceTest` juga memverifikasi atribut
 cookie tersebut.
-
-Jangan menggunakan screenshot yang memuat kredensial selain akun demo atau data
-pribadi.
