@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Peminjaman extends Model
 {
     protected $fillable = [
-        'id_kode_pinjam',
+        'kode_pinjam',
         'buku_id',
         'nim_peminjam',
         'nama_peminjam',

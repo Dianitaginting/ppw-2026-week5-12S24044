@@ -33,7 +33,7 @@ class PeminjamanService
             $buku->decrement('stok');
 
             return Peminjaman::create([
-                'id_kode_pinjam' => 'PJM-' . Str::upper(Str::random(10)),
+                'kode_pinjam' => 'PJM-'.Str::upper(Str::random(10)),
                 'buku_id' => $buku->id,
                 'nim_peminjam' => $nimPeminjam,
                 'nama_peminjam' => $namaPeminjam,

@@ -7,6 +7,7 @@ use App\Models\Kategori;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\View\View;
 
 class BukuController extends Controller
 {
@@ -14,12 +15,18 @@ class BukuController extends Controller
      * Menampilkan daftar buku, pencarian,
      * jumlah peminjaman, dan pagination.
      */
-    public function index(Request $request)
+    public function index(Request $request): View
     {
-        $search = trim($request->query('search', ''));
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+        ]);
+        $search = trim($validated['search'] ?? '');
 
-        // Query Builder untuk mengambil data katalog buku.
-        $query = DB::table('bukus')
+        if ($search !== '') {
+            $request->session()->put('last_book_search', $search);
+        }
+
+        $query = Buku::query()
             ->join(
                 'kategoris',
                 'bukus.kategori_id',
@@ -27,30 +34,10 @@ class BukuController extends Controller
                 'kategoris.id'
             )
             ->select(
-                'bukus.id',
-                'bukus.isbn',
-                'bukus.judul',
-                'bukus.penulis',
-                'bukus.penerbit',
-                'bukus.tahun_terbit',
-                'bukus.kategori_id',
-                'bukus.stok',
-                'bukus.sinopsis',
-                'bukus.created_at',
-                'bukus.updated_at',
+                'bukus.*',
                 'kategoris.nama_kategori'
-            );
-
-        // Menghitung jumlah seluruh riwayat peminjaman
-        // setiap buku menggunakan Eloquent withCount().
-        $jumlahPeminjaman = Buku::withCount('peminjamans')
-            ->select('id');
-
-        $query->addSelect([
-            'peminjamans_count' => $jumlahPeminjaman
-                ->whereColumn('bukus.id', 'bukus.id')
-                ->limit(1),
-        ]);
+            )
+            ->withCount('peminjamans');
 
         // Pencarian berdasarkan judul, ISBN, penulis,
         // atau nama kategori.
@@ -75,7 +62,26 @@ class BukuController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        return view('buku.index', compact('bukus', 'search'));
+        $statistikKatalog = DB::table('bukus')
+            ->selectRaw(
+                'COUNT(*) as total_judul_buku, COALESCE(SUM(stok), 0) as total_stok_tersedia'
+            )
+            ->first();
+
+        $statistikPeminjaman = DB::table('peminjamen')
+            ->selectRaw(
+                "COUNT(CASE WHEN status = 'dipinjam' THEN 1 END) as total_dipinjam, COUNT(CASE WHEN status = 'dikembalikan' THEN 1 END) as total_dikembalikan"
+            )
+            ->first();
+
+        $stats = [
+            'total_judul_buku' => (int) $statistikKatalog->total_judul_buku,
+            'total_stok_tersedia' => (int) $statistikKatalog->total_stok_tersedia,
+            'total_dipinjam' => (int) $statistikPeminjaman->total_dipinjam,
+            'total_dikembalikan' => (int) $statistikPeminjaman->total_dikembalikan,
+        ];
+
+        return view('buku.index', compact('bukus', 'search', 'stats'));
     }
 
     /**

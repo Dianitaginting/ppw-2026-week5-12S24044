@@ -24,19 +24,22 @@ class DatabaseSeeder extends Seeder
 
         foreach ($kategoris as $index => $nama) {
             // Membuat kategori hanya jika belum tersedia
-            $ktg = Kategori::firstOrCreate(
+            $kategori = Kategori::firstOrCreate(
                 [
-                    'kode_kategori' => 'KTG0' . ($index + 1),
+                    'kode_kategori' => 'KTG0'.($index + 1),
                 ],
                 [
                     'nama_kategori' => $nama,
                 ]
             );
 
-            // Membuat empat buku untuk setiap kategori
-            Buku::factory(4)->create([
-                'kategori_id' => $ktg->id,
-            ]);
+            if (! $kategori->bukus()->exists()) {
+                Buku::factory(4)->create([
+                    'kategori_id' => $kategori->id,
+                ]);
+            }
         }
+
+        $this->call(PeminjamanSeeder::class);
     }
 }

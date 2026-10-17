@@ -13,6 +13,44 @@
         </a>
     </div>
 
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Total Judul Buku</p>
+                    <p class="h3 mb-0">{{ number_format($stats['total_judul_buku']) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Total Stok Tersedia</p>
+                    <p class="h3 mb-0">{{ number_format($stats['total_stok_tersedia']) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Total Sedang Dipinjam</p>
+                    <p class="h3 mb-0">{{ number_format($stats['total_dipinjam']) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <p class="text-muted mb-1">Total Dikembalikan</p>
+                    <p class="h3 mb-0">{{ number_format($stats['total_dikembalikan']) }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- Form pencarian dinamis --}}
     <div class="card shadow-sm mb-3">
         <div class="card-body">
@@ -50,6 +88,12 @@
                         </a>
                     </div>
                 @endif
+
+                @if (session('last_book_search') && empty($search))
+                    <small class="text-muted d-block mt-2">
+                        Pencarian terakhir: {{ session('last_book_search') }}
+                    </small>
+                @endif
             </form>
         </div>
     </div>
@@ -65,7 +109,7 @@
         </div>
 
         <div class="table-responsive">
-            <table class="table table-hover table-sm align-middle mb-0">
+            <table class="table table-hover table-sm align-middle small mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>ISBN</th>

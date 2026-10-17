@@ -11,10 +11,10 @@ class PetugasSeeder extends Seeder
     public function run(): void
     {
         User::updateOrCreate(
-            ['email' => 'petugas@sipus-del.test'],
+            ['email' => 'pustakawan@del.ac.id'],
             [
-                'name' => 'Petugas Perpustakaan',
-                'password' => Hash::make('PetugasDel123!'),
+                'name' => 'Pustakawan',
+                'password' => Hash::make('password123'),
             ]
         );
     }

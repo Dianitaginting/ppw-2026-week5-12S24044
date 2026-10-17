@@ -7,6 +7,7 @@ use App\Models\Peminjaman;
 use App\Services\PeminjamanService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\View\View;
 
 class PeminjamanController extends Controller
@@ -32,11 +33,29 @@ class PeminjamanController extends Controller
             'nama_peminjam' => ['required', 'string', 'max:255'],
         ]);
 
-        $service->pinjam(
+        $peminjaman = $service->pinjam(
             (int) $validated['buku_id'],
             $validated['nim_peminjam'],
             $validated['nama_peminjam']
         );
+
+        $request->session()->put('last_borrower', [
+            'nim' => $peminjaman->nim_peminjam,
+            'nama' => $peminjaman->nama_peminjam,
+        ]);
+        $request->session()->put('last_peminjaman', $peminjaman->kode_pinjam);
+
+        Cookie::queue(cookie(
+            'last_peminjaman',
+            $peminjaman->kode_pinjam,
+            120,
+            '/',
+            null,
+            (bool) config('session.secure'),
+            true,
+            false,
+            'lax'
+        ));
 
         return redirect()
             ->route('peminjaman.index')

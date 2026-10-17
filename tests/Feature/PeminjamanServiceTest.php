@@ -4,9 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Buku;
 use App\Models\Kategori;
+use App\Models\Peminjaman;
+use App\Models\User;
 use App\Services\PeminjamanService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Cookie;
 use Tests\TestCase;
 
 class PeminjamanServiceTest extends TestCase
@@ -24,7 +27,7 @@ class PeminjamanServiceTest extends TestCase
         ]);
 
         return Buku::create([
-            'isbn' => 'TEST-' . uniqid(),
+            'isbn' => 'TEST-'.uniqid(),
             'judul' => 'Buku Pengujian',
             'penulis' => 'Penulis Test',
             'penerbit' => 'Penerbit Test',
@@ -51,7 +54,7 @@ class PeminjamanServiceTest extends TestCase
         $this->assertSame('dipinjam', $peminjaman->status);
         $this->assertSame(2, $buku->fresh()->stok);
 
-        $this->assertNotEmpty($peminjaman->id_kode_pinjam);
+        $this->assertNotEmpty($peminjaman->kode_pinjam);
         $this->assertSame('12S24044', $peminjaman->nim_peminjam);
         $this->assertSame('Mahasiswa Test', $peminjaman->nama_peminjam);
 
@@ -62,6 +65,48 @@ class PeminjamanServiceTest extends TestCase
             $peminjaman->tanggal_pinjam->copy()->addDays(7)->toDateString(),
             $peminjaman->tanggal_jatuh_tempo->toDateString()
         );
+    }
+
+    public function test_peminjaman_menyimpan_state_session_dan_mengantre_cookie_transaksi(): void
+    {
+        $kategori = Kategori::create([
+            'kode_kategori' => 'HTTP',
+            'nama_kategori' => 'Kategori HTTP',
+        ]);
+        $buku = Buku::create([
+            'isbn' => 'HTTP-'.uniqid(),
+            'judul' => 'Buku HTTP',
+            'penulis' => 'Penulis Test',
+            'penerbit' => 'Penerbit Test',
+            'tahun_terbit' => 2025,
+            'kategori_id' => $kategori->id,
+            'stok' => 1,
+            'sinopsis' => 'Buku untuk pengujian HTTP.',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('peminjaman.store'), [
+                'buku_id' => $buku->id,
+                'nim_peminjam' => '12S24044',
+                'nama_peminjam' => 'Mahasiswa HTTP',
+            ]);
+
+        $peminjaman = Peminjaman::query()->firstOrFail();
+        $response->assertRedirect(route('peminjaman.index'))
+            ->assertSessionHas('last_borrower', [
+                'nim' => '12S24044',
+                'nama' => 'Mahasiswa HTTP',
+            ])
+            ->assertSessionHas('last_peminjaman', $peminjaman->kode_pinjam);
+
+        $transactionCookie = collect($response->headers->getCookies())
+            ->first(
+                fn (Cookie $cookie): bool => $cookie->getName() === 'last_peminjaman'
+            );
+
+        $this->assertNotNull($transactionCookie);
+        $this->assertTrue($transactionCookie->isHttpOnly());
+        $this->assertSame('lax', $transactionCookie->getSameSite());
     }
 
     /**
@@ -87,6 +132,33 @@ class PeminjamanServiceTest extends TestCase
         }
 
         $this->assertSame(0, $buku->fresh()->stok);
+        $this->assertDatabaseCount('peminjamen', 0);
+    }
+
+    public function test_stok_dipulihkan_jika_pembuatan_transaksi_gagal(): void
+    {
+        $buku = $this->buatBuku(1);
+
+        Peminjaman::creating(static function (Peminjaman $peminjaman): void {
+            throw new \RuntimeException('Simulasi kegagalan penyimpanan.');
+        });
+
+        try {
+            app(PeminjamanService::class)->pinjam(
+                $buku->id,
+                '12S24044',
+                'Mahasiswa Test'
+            );
+
+            $this->fail('Kegagalan penyimpanan seharusnya diteruskan.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame(
+                'Simulasi kegagalan penyimpanan.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(1, $buku->fresh()->stok);
         $this->assertDatabaseCount('peminjamen', 0);
     }
 
@@ -121,7 +193,7 @@ class PeminjamanServiceTest extends TestCase
         );
 
         $this->assertNotEmpty(
-            $peminjamanTerbaru->id_kode_pinjam
+            $peminjamanTerbaru->kode_pinjam
         );
 
         $this->assertSame(

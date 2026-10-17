@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Buku;
 use App\Models\Kategori;
+use App\Models\Peminjaman;
 use App\Models\User;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -55,14 +56,77 @@ class BukuCrudTest extends TestCase
             ->assertViewIs('buku.index')
             ->assertSee($kategori->nama_kategori);
 
-        // Query katalog menggunakan JOIN kategori dan subquery
-        // jumlah peminjaman, sehingga tidak perlu query kategori
-        // terpisah untuk setiap buku.
+        // Dua query melayani pagination, dua lainnya menghitung statistik.
         $this->assertCount(
-            2,
+            4,
             $queries,
-            'The paginated index should use a count query and a data query.'
+            'The index should avoid extra per-book category or loan queries.'
         );
+    }
+
+    public function test_catalog_search_counts_loans_and_shows_library_statistics(): void
+    {
+        $kategori = Kategori::factory()->create();
+        $buku = Buku::factory()->create([
+            'isbn' => 'ISBN-QUERY-001',
+            'judul' => 'Buku Query Builder',
+            'penulis' => 'Penulis Query Builder',
+            'stok' => 4,
+            'kategori_id' => $kategori->id,
+        ]);
+        Buku::factory()->create([
+            'isbn' => 'ISBN-OTHER-001',
+            'stok' => 1,
+            'kategori_id' => $kategori->id,
+        ]);
+
+        Peminjaman::create([
+            'kode_pinjam' => 'PJM-QUERY-001',
+            'buku_id' => $buku->id,
+            'nim_peminjam' => '12S24044',
+            'nama_peminjam' => 'Peminjam Aktif',
+            'tanggal_pinjam' => '2026-10-10',
+            'tanggal_jatuh_tempo' => '2026-10-17',
+            'status' => 'dipinjam',
+        ]);
+        Peminjaman::create([
+            'kode_pinjam' => 'PJM-QUERY-002',
+            'buku_id' => $buku->id,
+            'nim_peminjam' => '12S24045',
+            'nama_peminjam' => 'Peminjam Selesai',
+            'tanggal_pinjam' => '2026-10-01',
+            'tanggal_jatuh_tempo' => '2026-10-08',
+            'tanggal_kembali' => '2026-10-07',
+            'status' => 'dikembalikan',
+        ]);
+
+        foreach (['Query Builder', 'ISBN-QUERY-001', 'Penulis Query Builder'] as $search) {
+            $this->get(route('buku.index', ['search' => $search]))
+                ->assertOk()
+                ->assertViewHas('bukus', function ($bukus) use ($buku): bool {
+                    return $bukus->total() === 1
+                        && $bukus->first()->id === $buku->id
+                        && $bukus->first()->peminjamans_count === 2;
+                })
+                ->assertViewHas('stats', [
+                    'total_judul_buku' => 2,
+                    'total_stok_tersedia' => 5,
+                    'total_dipinjam' => 1,
+                    'total_dikembalikan' => 1,
+                ]);
+        }
+
+        $this->get(route('buku.index'))
+            ->assertOk()
+            ->assertSessionHas('last_book_search', 'Penulis Query Builder')
+            ->assertSee('Pencarian terakhir: Penulis Query Builder');
+    }
+
+    public function test_catalog_rejects_non_string_search_parameters(): void
+    {
+        $this->get(route('buku.index', ['search' => ['unexpected']]))
+            ->assertRedirect()
+            ->assertSessionHasErrors('search');
     }
 
     public function test_buku_can_be_created_and_shown(): void
@@ -178,6 +242,15 @@ class BukuCrudTest extends TestCase
         $buku = Buku::factory()->create([
             'kategori_id' => $kategori->id,
         ]);
+        $peminjaman = Peminjaman::create([
+            'kode_pinjam' => 'PJM-DELETE-001',
+            'buku_id' => $buku->id,
+            'nim_peminjam' => '12S24044',
+            'nama_peminjam' => 'Peminjam Test',
+            'tanggal_pinjam' => '2026-10-10',
+            'tanggal_jatuh_tempo' => '2026-10-17',
+            'status' => 'dipinjam',
+        ]);
 
         $this->delete(route('buku.destroy', $buku))
             ->assertRedirect(route('buku.index'))
@@ -185,6 +258,9 @@ class BukuCrudTest extends TestCase
 
         $this->assertDatabaseMissing('bukus', [
             'id' => $buku->id,
+        ]);
+        $this->assertDatabaseMissing('peminjamen', [
+            'id' => $peminjaman->id,
         ]);
     }
 
